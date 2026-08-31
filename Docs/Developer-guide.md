@@ -45,6 +45,18 @@
 
 The RDP client uses the Windows Terminal Services ActiveX control through checked-in `MSTSCLib` and `AxMSTSCLib` interop assemblies. RDP, WinForms scaling, ICA, VMRC, VNC/packet capture, and installer custom actions require Windows runtime testing; ICA and VMRC also require their vendor clients, and packet capture requires a compatible WinPcap/Npcap installation. For an RDP change, manually connect and reconnect, switch tabs and full screen, toggle keyboard input capture, move focus between the toolbar and RDP surface, and verify local versus remote handling of system key combinations.
 
+### .NET Framework 4.8 compatibility audit
+No framework API used by the core application was found to have been removed in .NET Framework 4.8. The following retarget-sensitive areas require regression testing:
+
+* .NET Framework 4.7 and later use operating-system TLS defaults. The update checker temporarily adds TLS 1.2 through `ServicePointManager`, while the legacy Amazon S3 client uses `HttpWebRequest`; test both through the expected proxy and endpoints.
+* WinForms includes later accessibility and high-DPI fixes, but this application does not opt in to modern DPI awareness and its forms use a mixture of font and DPI autoscaling. Check layout, fonts, icons, toolbars, and ActiveX surfaces at 100–300% scaling and across monitors.
+* Existing credentials depend on DPAPI, legacy Rijndael/PBKDF2 data, and some system-default text encoding. Verify existing master-password and credential data under the same Windows user, plus import/export on a non-English Windows code page and under any required FIPS policy.
+* Favorites, settings, and imports use `XmlSerializer`, `XDocument`, and `XmlTextReader`. Round-trip existing configuration files and test RDP/RDCMan/Terminals imports, including malformed files. Network sharing also uses `BinaryFormatter`; it remains available in .NET Framework 4.8 but is an independent legacy security risk and should only process trusted data.
+* Plugins are discovered with `Assembly.LoadFrom`, `LoadFile`, and reflection, and load both retargeted assemblies and bundled .NET Framework 2.0 libraries. Start every enabled protocol plugin and verify missing optional vendor components fail without preventing other plugins from loading.
+* The single-instance command-line handoff uses WCF named pipes, and SQL persistence uses Entity Framework 5 with `TransactionScope`. Test launching a second instance with command-line arguments and perform SQL create/update/delete and password-change operations.
+* Preserve the existing x86 configurations. Native WTS pointer handling, RDP/ICA/VMRC ActiveX controls, WinPcap, and the WiX custom action all require matching Windows registration and bitness; they are not validated by a successful managed build.
+* The embedded `WebBrowser` control uses the Windows Internet Explorer engine. Validate HTTP/HTTPS navigation separately because its rendering and protocol support depend on Windows configuration rather than the target framework alone.
+
 ## Develop new plugins
 It is also possible to provide new protocol specific connection extension see [Write new plugin](/Docs/WriteNewPlugin.md)
 
