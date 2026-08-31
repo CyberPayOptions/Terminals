@@ -34,13 +34,29 @@ namespace Terminals.Connections
 
         private readonly RdpService service = new RdpService();
 
+        private bool grabInput;
+
         public TerminalServer Server { get{ return this.service.Server; } }
 
         public bool IsTerminalServer { get { return this.service.IsTerminalServer; } }
 
         public IConnectionSettings Settings { get; set; }
 
-        public bool GrabInput { get; set; }
+        /// <summary>
+        /// Gets or sets the user intent to send the keyboard shortcuts into the remote session.
+        /// The intent is kept also when the client control looses the focus, e.g. because of a click
+        /// into the application menu or toolbar. In such case only the keyboard hook is released,
+        /// and is applied again, when the client control receives the focus.
+        /// </summary>
+        public bool GrabInput
+        {
+            get { return this.grabInput; }
+            set
+            {
+                this.grabInput = value;
+                this.ApplyKeyboardGrab(value);
+            }
+        }
 
         #region IConnectionExtra
 
@@ -565,6 +581,41 @@ namespace Terminals.Connections
             var clientControl = (Control)this.client;
             clientControl.DragEnter += new DragEventHandler(this.client_DragEnter);
             clientControl.DragDrop += new DragEventHandler(this.client_DragDrop);
+            clientControl.Enter += new EventHandler(this.client_Enter);
+            clientControl.Leave += new EventHandler(this.client_Leave);
+        }
+
+        /// <summary>
+        /// Applies the keyboard shortcuts capture in the remote session, only if the user asked for it.
+        /// Doesn't change the user intent stored in <see cref="GrabInput"/>.
+        /// </summary>
+        private void ApplyKeyboardGrab(bool grab)
+        {
+            if (this.client == null)
+                return;
+
+            try
+            {
+                // 1 - keyboard shortcuts are applied in the remote session, 0 - on the local computer
+                this.client.SecuredSettings2.KeyboardHookMode = grab ? 1 : 0;
+            }
+            catch (Exception exc)
+            {
+                Logging.Info("Unable to update the RDP client keyboard hook mode.", exc);
+            }
+        }
+
+        private void client_Enter(object sender, EventArgs e)
+        {
+            // the focus returned back from the application menu, toolbar or another control
+            this.ApplyKeyboardGrab(this.grabInput);
+        }
+
+        private void client_Leave(object sender, EventArgs e)
+        {
+            // let the user control the application, while the client control isn't focused,
+            // but remember his intent to grab the input, when the focus returns back
+            this.ApplyKeyboardGrab(false);
         }
 
         private void client_OnConnected(object sender, EventArgs e)
