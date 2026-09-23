@@ -316,6 +316,11 @@ namespace Terminals
             if (currentConnection != null)
             {
                 currentConnection.GrabInput = !currentConnection.GrabInput;
+
+                // the connection has to be focused to be able to capture the keyboard shortcuts
+                if (currentConnection.GrabInput && this.CurrentTerminal != null)
+                    this.CurrentTerminal.Focus();
+
                 this.UpgadeGrabInput();
             }
         }
